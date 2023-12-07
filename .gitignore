@@ -1,1 +1,6 @@
 somatic_svs.tsv
+COLO829_somatic.tsv
+.DS_Store
+COLO829_somatic_forced_synthetic.tsv
+code_outputs/model/tsv/COLO829_k10.tsv
+code_outputs/model/tsv/df_with_ccf.tsv
