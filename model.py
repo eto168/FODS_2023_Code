@@ -19,10 +19,6 @@ from pyro.optim import Adam
 from pyro.infer.autoguide import AutoNormal
 from pyro.infer.autoguide.initialization import init_to_mean, init_to_sample
 
-# LKJcholesky prior for covariance matrix
-# y ~ MVN
-# mu ~ N(0, 1)
-
 
 def probability_function(tumour_content, variant_allele_count, copy_number_state, cancer_cell_fraction):
     """ A function to unify parameters into a probability for observing X number of reads. 
@@ -33,21 +29,13 @@ def probability_function(tumour_content, variant_allele_count, copy_number_state
     Must return a probability (i.e. value between {0, 1})
     """
 
-    # cancer_cell_fraction = cancer_cell_fraction / \
-    #     torch.max(cancer_cell_fraction)
-
     # normal, reference, variant all CN = 2. Our default assumption
-    # copy_number_vector = [2, 2, copy_number_state]
     copy_number_vector = copy_number_state
 
     # this is equivalent to saying, only variant alleles are observed in the variant population
-    # variant_allele_vector = [0, 0, variant_allele_count]
     variant_allele_vector = variant_allele_count
 
     # Pyclone's function
-    c1 = (1-tumour_content)*copy_number_vector
-    c2 = tumour_content*(1-cancer_cell_fraction)*copy_number_vector
-    c3 = tumour_content*cancer_cell_fraction*copy_number_vector
 
     z_constant = (1-tumour_content)*copy_number_vector + \
         tumour_content*(1-cancer_cell_fraction)*copy_number_vector + \
@@ -113,6 +101,14 @@ def model(data):
             "mu", dist.Normal(0, 1))
         
         cluster_means = torch.special.expit(cluster_means)
+        
+        # # for a beta distribution, a gamma prior works. with 0.01, 0.01 makes it uninformative 
+        # # the support for gamma is strictly > 0
+        # beta_alpha = pyro.sample("alpha", dist.Normal(0, 1))
+        # beta_beta = pyro.sample("beta", dist.Normal(0, 1))
+        
+        # beta_alpha = torch.special.expit(beta_alpha)
+        # beta_beta = torch.special.expit(beta_beta)
 
     # -------------------------------------------------------------------------------------------
 
@@ -142,6 +138,11 @@ def model(data):
 
         # using expit, convert normal output to value between [0, 1] since CCF is necessarily a proportion
         cancer_cell_fraction = torch.special.expit(cancer_cell_fraction)
+        
+        
+        # # Model CCF with a beta distribution (its support is [0, 1])
+        # cancer_cell_fraction = pyro.sample("CCF", dist.Beta(beta_alpha[cluster_assignment], beta_beta[cluster_assignment]))
+        
 
         ############# Observed values with NO PRIORS ##############
         # Genotype Values ---------------------
@@ -250,11 +251,11 @@ def main():
     # K clusters
     K = 10
     # -------------------------
-    df = pd.read_csv("./COLO829_somatic_forced_synthetic.tsv",
-                     delimiter="\t", index_col=None)
-    
-    # df = pd.read_csv("./somatic_svs.tsv",
+    # df = pd.read_csv("./COLO829_somatic_forced_synthetic.tsv",
     #                  delimiter="\t", index_col=None)
+    
+    df = pd.read_csv("./somatic_svs.tsv",
+                     delimiter="\t", index_col=None)
 
     # Get params:
     num_svs = df.shape[0]  # get number of rows == number of svs
@@ -266,7 +267,6 @@ def main():
     vaf = df["VAF"].to_numpy()
 
     # Genotype Information
-    # genotype = df["genotype"].to_numpy()
     variant_allele_count = df["variant_allele_count"].to_numpy()
     variant_allele_count = [variant_allele_count*0, variant_allele_count*0, variant_allele_count]
     
